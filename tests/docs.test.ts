@@ -14,7 +14,7 @@ import { describe, expect, it } from "vitest";
 
 import { parseJson, readKey, readString } from "../scripts/lib/json.mjs";
 import { resolveDependencyBin, runNode } from "../scripts/lib/node-tools.mjs";
-import { normalizeIdentifier } from "../src/index.js";
+import { TscBlameError } from "../src/index.js";
 
 // the `updating-docs` skill requires every documented code example to
 // compile against the *current* public API. Nothing did: a substring
@@ -92,9 +92,7 @@ const JSDOC_THEN_EXPORT =
  * the example deliberately leaves free (a reader is expected to supply it) —
  * never a change to the documented example itself.
  */
-const SNIPPET_FIXTURES = new Map<string, string>([
-  ["withTimeout", "declare const url: string;\n"],
-]);
+const SNIPPET_FIXTURES = new Map<string, string>([]);
 
 /** Strip a JSDoc comment's leading ` * ` from every line, left over from
  * `/\*\*...\*\/` capturing the comment body verbatim. */
@@ -197,10 +195,10 @@ describe("documented examples compile against the public API", () => {
 
 describe("README quick start", () => {
   it("matches runtime behavior", () => {
-    const result = normalizeIdentifier("Hello World");
-    expect(result).toBe("hello-world");
+    const result = new Error("boom") instanceof TscBlameError;
+    expect(result).toBe(false);
     // The "documented examples compile" suite above only type-checks this
-    // snippet — a `// => "..."` comment is inert to tsc. Compare the
+    // snippet — a `// => ...` comment is inert to tsc. Compare the
     // annotation against the real, current output here, so a stale or
     // typo'd claimed result still fails loudly.
     const readme = readFileSync(path.join(repoRoot, "README.md"), "utf8");

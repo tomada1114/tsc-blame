@@ -79,24 +79,25 @@ is unflagged, so a CommonJS consumer can `require()` it directly.
 
 ## Current package contents
 
-Until the measurement pipeline lands, the package exports the template scaffolding it
-was generated from. These symbols are placeholders and will be removed before the first
-release; do not build on them.
+Until the measurement pipeline lands, the package exports only the error type the
+pipeline will raise. Every error the pipeline raises is a `TscBlameError`, so this is
+how a caller tells it apart from anything else a dependency might throw:
 
 ```ts
-import { normalizeIdentifier } from "tsc-blame";
+import { TscBlameError } from "tsc-blame";
 
-console.log(normalizeIdentifier("Hello World"));
-// => "hello-world"
+console.log(new Error("boom") instanceof TscBlameError);
+// => false
 ```
 
 All public symbols are named exports from the package root. Deep imports are private and
 blocked by the package export map.
 
-- `normalizeIdentifier(input, options?)` creates a URL- and filename-safe ASCII
-  identifier using `-`, `_`, `.`, or `~` as its separator.
-- `withTimeout(operation, options)` runs an abortable operation with a deadline.
-- `InvalidInputError` and `TimeoutError` expose stable error codes.
+- `TscBlameError` carries a stable `code: TscBlameErrorCode` and `stage: string` — safe
+  to branch on — plus an optional `cause`. `message` is written for humans and may be
+  reworded in a patch release.
+- `TscBlameErrorCode` has no members yet: no pipeline stage has shipped, so nothing
+  raises one. Each later release widens it with the codes the stage it adds can raise.
 
 See the generated TypeDoc documentation from `pnpm docs:build` for the full API
 reference.
