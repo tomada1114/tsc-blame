@@ -58,8 +58,10 @@ exported from `src/index.ts` (`public-api-contract`); the `.mjs` files under `sc
   `noUncheckedIndexedAccess` is on. Treat the `undefined` branch as real rather than
   asserting it away.
 - `exactOptionalPropertyTypes` makes an absent property and an explicit `undefined`
-  distinct types. A public `XOptions` interface declares its properties `readonly` and
-  `?:` (mirroring `NormalizeIdentifierOptions` and `WithTimeoutOptions`); an internal
+  distinct types. A public options type declares an optional property `readonly` and
+  `?:` — `TscBlameError`'s constructor options do this for `cause` — never as
+  `readonly cause: unknown | undefined`, which would force a caller to write
+  `cause: undefined` explicitly for a property they mean to omit entirely. An internal
   argument whose omission would be a bug takes a required `T | undefined` instead, so a
   caller cannot drop it by accident.
 - `noPropertyAccessFromIndexSignature` forbids dot access on an index signature, while
@@ -78,8 +80,10 @@ exported from `src/index.ts` (`public-api-contract`); the `.mjs` files under `sc
   `expectTypeOf` test in `tests/types.test.ts` either way — a hand-written annotation is
   the standard way to accidentally widen a generic that should stay preserved.
 - Keep exported generics narrow: accept the widest reasonable input, return the
-  narrowest true output. `withTimeout` is the worked example — it returns the
-  operation's own resolved type instead of widening it to something looser.
+  narrowest true output — a generic wrapping an async operation should return that
+  operation's own resolved type instead of widening it to something looser. No generic
+  export exists in the surface today (`src/index.ts` exports only `TscBlameError` and
+  `TscBlameErrorCode`); apply this the moment one is added.
 - Let inference do the work inside a function body; reserve explicit annotations for
   boundaries (parameters, exported return types), not every local binding.
 

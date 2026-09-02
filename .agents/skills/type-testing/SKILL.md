@@ -3,10 +3,9 @@ name: type-testing
 description: >
   Covers writing compile-time assertions in tests/types.test.ts with Vitest's
   expectTypeOf — inferred return types, generic preservation, accepted and rejected call
-  signatures, and discriminated-union narrowing on classes like InvalidInputError and
-  TimeoutError. Use when adding or reviewing a @ts-expect-error assertion, a type test
-  for a new or changed public signature, or when a type test passes despite the
-  annotation being wrong.
+  signatures, and discriminated-union narrowing. Use when adding or reviewing a
+  @ts-expect-error assertion, a type test for a new or changed public signature, or when
+  a type test passes despite the annotation being wrong.
 ---
 
 # Type Testing
@@ -32,21 +31,24 @@ public function or type touched by a change, assert:
 Vitest executes the body of `it()`. A directly inlined invalid call is therefore
 evaluated at test time, not just type-checked — if the call happens to throw or have a
 side effect, the test can pass or fail for the wrong reason, and if the assertion
-depends on a code path never reached, nothing was proven at all.
+depends on a code path never reached, nothing was proven at all. (`code` below is a
+value already typed as `TscBlameErrorCode`, used only so the object literal's other
+fields stay isolated to what each example actually tests — see the borrowed trap further
+down.)
 
 ```ts
 // Wrong: runs the invalid call as part of the test body.
-it("rejects a number", () => {
-  // @ts-expect-error a number is not a valid identifier source
-  normalizeIdentifier(42);
+it("rejects a non-string stage", () => {
+  // @ts-expect-error stage must name the pipeline phase as a string
+  new TscBlameError({ code, stage: 42, message: "m" });
 });
 
 // Right: declare the invalid call inside a function, never invoke it. The
 // assertion is that the function fails to compile.
-it("rejects a number", () => {
+it("rejects a non-string stage", () => {
   const rejected = (): void => {
-    // @ts-expect-error a number is not a valid identifier source
-    normalizeIdentifier(42);
+    // @ts-expect-error stage must name the pipeline phase as a string
+    new TscBlameError({ code, stage: 42, message: "m" });
   };
   expect(rejected).toBeTypeOf("function");
 });
@@ -54,26 +56,31 @@ it("rejects a number", () => {
 
 ## Trap 2: a union initializer narrows before the assertion runs
 
-`const error: A | B = new B()` infers `error` as `B`, not `A | B` — TypeScript narrows a
+`const value: A | B = makeB()` infers `value` as `B`, not `A | B` — TypeScript narrows a
 `const` on its initializer. An assertion against a variable declared this way tests the
-concrete class, not the union, so it proves nothing about the branch that is supposed to
-widen and narrow.
+concrete branch, not the union, so it proves nothing about the branch that is supposed
+to widen and narrow.
 
 ```ts
-// Wrong: `error` is inferred as TimeoutError, not the union.
-const error: InvalidInputError | TimeoutError = new TimeoutError(1);
+// Wrong: `shape` is inferred as Square, not the union.
+const shape: Circle | Square = { kind: "square", side: 2 };
 
 // Right: receive the value as a function parameter, so the annotation on the
 // parameter — not the argument's own type — is what the union test checks.
-const classify = (error: InvalidInputError | TimeoutError): void => {
-  if (error.code === "ERR_TIMEOUT") {
-    expectTypeOf(error).toEqualTypeOf<TimeoutError>();
+const classify = (shape: Circle | Square): void => {
+  if (shape.kind === "circle") {
+    expectTypeOf(shape).toEqualTypeOf<Circle>();
   } else {
-    expectTypeOf(error).toEqualTypeOf<InvalidInputError>();
+    expectTypeOf(shape).toEqualTypeOf<Square>();
   }
 };
-classify(new TimeoutError(1));
+classify({ kind: "square", side: 2 });
 ```
+
+`TscBlameError` does not need this pattern today — every code shares the same three
+fields, so there is no per-code variant to narrow into (`src/errors.ts`'s remarks). The
+trap still applies the moment a public type is a real discriminated union of distinct
+shapes.
 
 ## A borrowed trap: `@ts-expect-error` can be satisfied by the wrong error
 
