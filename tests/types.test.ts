@@ -1,98 +1,70 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 
-import {
-  InvalidInputError,
-  normalizeIdentifier,
-  TimeoutError,
-  withTimeout,
-  type NormalizeIdentifierOptions,
-  type WithTimeoutOptions,
-} from "../src/index.js";
+import { TscBlameError, type TscBlameErrorCode } from "../src/index.js";
 
 // These are compile-time assertions about the public surface. They run under
 // Vitest so a broken type contract fails the same gate as a broken behavior,
 // while tests/package.test.ts checks the *published declarations* from a
 // consumer's point of view.
 describe("public API types", () => {
-  it("normalizeIdentifier returns a string and takes optional options", () => {
-    expectTypeOf(normalizeIdentifier).toBeCallableWith("input");
-    expectTypeOf(normalizeIdentifier).toBeCallableWith("input", { maxLength: 8 });
-    expectTypeOf(normalizeIdentifier("input")).toEqualTypeOf<string>();
+  it("has no members yet, and every future one is a string literal", () => {
+    // src/errors.ts's remarks: TscBlameErrorCode is widened one literal at a
+    // time, in the same pull request that ships the pipeline stage raising
+    // it. Nothing has shipped, so the union is exactly `never` today — this
+    // assertion is the compile-time half of that state, and starts failing
+    // the moment the first literal is added, which is the point at which
+    // this test (and the cast in tests/errors.test.ts) needs updating.
+    expectTypeOf<TscBlameErrorCode>().toEqualTypeOf<never>();
   });
 
-  it("rejects input that is not a string", () => {
-    // Declared but never invoked: the assertion is that this body fails to
-    // compile without the `@ts-expect-error` comments.
+  it("exposes TscBlameError.code typed as TscBlameErrorCode", () => {
+    expectTypeOf<TscBlameError["code"]>().toEqualTypeOf<TscBlameErrorCode>();
+  });
+
+  it("exposes TscBlameError.stage as a string", () => {
+    expectTypeOf<TscBlameError["stage"]>().toEqualTypeOf<string>();
+  });
+
+  it("exposes TscBlameError.cause as optional and unknown", () => {
+    expectTypeOf<TscBlameError["cause"]>().toEqualTypeOf<unknown>();
+  });
+
+  it("requires code, stage, and message; cause is optional", () => {
+    // Declared, never given a value: TscBlameErrorCode has no members yet
+    // (see src/errors.ts), so no expression actually has this type. Using it
+    // here — rather than a cast on each call below — keeps `code` itself
+    // type-correct in every object literal, so the only diagnostic each
+    // `@ts-expect-error` below can be satisfied by is the one under test, not
+    // an incidental error on `code` (the type-testing skill's "@ts-expect-error
+    // can be satisfied by the wrong error" trap).
+    // TscBlameErrorCode has no members yet (see src/errors.ts), so no real
+    // expression has this type; `undefined` is used as the runtime stand-in
+    // because `never` is a subtype of `undefined`, so the assertion holds.
+    const code = undefined as never;
+
     const rejected = (): void => {
-      // @ts-expect-error a number is not a valid identifier source
-      normalizeIdentifier(42);
-      // @ts-expect-error options must be an object, not a separator string
-      normalizeIdentifier("input", "-");
-      // @ts-expect-error unknown options are typos, not extension points
-      normalizeIdentifier("input", { seperator: "-" });
+      // @ts-expect-error code, stage, and message are all required
+      new TscBlameError({});
+      // @ts-expect-error stage must be a string, not a number
+      new TscBlameError({ code, stage: 1, message: "m" });
+      // @ts-expect-error message is required
+      new TscBlameError({ code, stage: "s" });
+      // @ts-expect-error an unknown option is a typo, not an extension point
+      new TscBlameError({ code, stage: "s", message: "m", extra: true });
     };
     expect(rejected).toBeTypeOf("function");
   });
 
-  it("exposes NormalizeIdentifierOptions as fully optional and readonly", () => {
-    expectTypeOf<NormalizeIdentifierOptions>().toEqualTypeOf<{
-      readonly separator?: string;
-      readonly maxLength?: number;
-      readonly lowercase?: boolean;
-    }>();
-  });
-
-  it("withTimeout preserves the operation's resolved type", () => {
-    expectTypeOf(withTimeout(() => Promise.resolve(1), { timeoutMs: 1 })).toEqualTypeOf<
-      Promise<number>
-    >();
-    expectTypeOf(
-      withTimeout(() => Promise.resolve("a" as const), { timeoutMs: 1 }),
-    ).toEqualTypeOf<Promise<"a">>();
-  });
-
-  it("withTimeout requires an explicit deadline and a promise", () => {
-    const rejected = (): void => {
-      // @ts-expect-error timeoutMs is required, there is no implicit default
-      void withTimeout(() => Promise.resolve(1), {});
-      // @ts-expect-error the operation must return a promise
-      void withTimeout(() => 1, { timeoutMs: 1 });
-    };
-    expect(rejected).toBeTypeOf("function");
-  });
-
-  it("passes an AbortSignal to the operation", () => {
-    expectTypeOf(withTimeout<number>)
-      .parameter(0)
-      .parameter(0)
-      .toEqualTypeOf<AbortSignal>();
-  });
-
-  it("exposes WithTimeoutOptions with a required deadline", () => {
-    expectTypeOf<WithTimeoutOptions["timeoutMs"]>().toEqualTypeOf<number>();
-    expectTypeOf<WithTimeoutOptions>().toEqualTypeOf<{
-      readonly timeoutMs: number;
-      readonly signal?: AbortSignal;
-    }>();
-  });
-
-  it("narrows errors by their discriminating code", () => {
-    // Taken as a parameter so the union is not narrowed by an initializer.
-    const classify = (error: InvalidInputError | TimeoutError): void => {
-      if (error.code === "ERR_TIMEOUT") {
-        expectTypeOf(error).toEqualTypeOf<TimeoutError>();
-        expectTypeOf(error.timeoutMs).toEqualTypeOf<number>();
-      } else {
-        expectTypeOf(error).toEqualTypeOf<InvalidInputError>();
-        expectTypeOf(error.field).toEqualTypeOf<string>();
-      }
-    };
-    classify(new TimeoutError(1));
-    classify(new InvalidInputError("input", "rejected"));
-  });
-
-  it("keeps error codes as literal types", () => {
-    expectTypeOf<InvalidInputError["code"]>().toEqualTypeOf<"ERR_INVALID_INPUT">();
-    expectTypeOf<TimeoutError["code"]>().toEqualTypeOf<"ERR_TIMEOUT">();
+  it("accepts an explicit cause of any type", () => {
+    // TscBlameErrorCode has no members yet (see src/errors.ts), so no real
+    // expression has this type; `undefined` is used as the runtime stand-in
+    // because `never` is a subtype of `undefined`, so the assertion holds.
+    const code = undefined as never;
+    expectTypeOf(TscBlameError).toBeConstructibleWith({
+      code,
+      stage: "s",
+      message: "m",
+      cause: "anything",
+    });
   });
 });

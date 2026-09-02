@@ -48,9 +48,24 @@ function isMain(moduleUrl: string): boolean {
   );
 }
 
-if (isMain(import.meta.url)) {
-  const result = runCli(process.argv.slice(2), process.argv[1] ?? "package");
+/**
+ * Run the command against the real process and report its result.
+ *
+ * @remarks
+ * Exported so a test can exercise these side effects directly, in-process —
+ * this is the only part of the file that touches `process` I/O.
+ *
+ * @param argv Arguments after the executable name.
+ * @param executable Name or path shown in the usage line.
+ * @returns The exit code the process should report.
+ */
+export function main(argv: readonly string[], executable: string): number {
+  const result = runCli(argv, executable);
   process.stdout.write(result.stdout);
   process.stderr.write(result.stderr);
-  process.exitCode = result.exitCode;
+  return result.exitCode;
+}
+
+if (isMain(import.meta.url)) {
+  process.exitCode = main(process.argv.slice(2), process.argv[1] ?? "package");
 }
