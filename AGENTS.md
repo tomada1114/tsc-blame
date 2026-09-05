@@ -120,7 +120,8 @@ names its own boundary with its neighbours.
   itself, not a pattern enforcing it. An agent may still carry its own personal
   permission settings on top (a Claude Code session's own `~/.claude/settings.json`, for
   instance), but that is a choice made outside this repository, not something it ships
-  or requires.
+  or requires. The one scoped exception is written out under
+  [Unattended agents in a Docker Sandbox](#unattended-agents-in-a-docker-sandbox) below.
 - Never read or write `.env*` (the `.example`, `.sample` and `.template` variants are
   fine) or anything under `secrets/`.
 - Never write a credential into a tracked file — no registry auth token, no private key.
@@ -140,6 +141,42 @@ reach is looking at a red run and has classified its task as "make CI green" —
 writing a test or adding a dependency, so neither skill fires. `placing-tests` explains
 why there are three separate coverage floors and `managing-dependencies` explains what
 each supply-chain setting closes off; the prohibition itself is here.
+
+## Unattended agents in a Docker Sandbox
+
+The rule above — a human approves every commit, push and pull request — assumes an agent
+running on the host, where a mistake reaches the working tree, the default branch, and
+whatever credentials the logged-in human holds. A Docker Sandbox (`sbx`) clone-mode
+container removes all three: the agent works on a private in-container clone, the host
+checkout is never writable from inside it, and the only credentials it can reach are the
+ones a host-side proxy injects — a repository-scoped, expiring GitHub token, never the
+host's `gh` login, `~/.codex`, Git keychain or SSH keys.
+
+Inside such a sandbox, and only there, an agent has standing approval for the loop below
+without asking a human per step. Anything not listed stays under the rule above.
+
+- Create and work on a new branch under the `codex/` prefix. Never any other branch.
+- Implement, verify, and commit — only the changes the agent itself made in the sandbox.
+  A change that arrived with the clone is someone else's commit to make.
+- Push that branch to `origin`, and open a draft pull request from it.
+
+The prohibitions are absolute, and asking a human does not lift them:
+
+- No push to `main` or `master`, direct or otherwise.
+- No force push, no rewriting published history, no deleting a branch or tag on
+  `origin`.
+- No `--no-verify` and no `LEFTHOOK=0` — the pre-commit hook runs on every commit.
+- No publish, no workflow dispatch, and no merging a pull request.
+
+Before pushing, run the narrowest check that can fail for what changed and then the
+gate: `pnpm check:quick` at minimum, `pnpm check` once the change is reachable from
+`src/index.ts`. Draft is the honest state for a branch whose local run was not green, so
+the pull request body says which checks ran and which did not.
+
+The sandbox boundary is what makes any of this safe, which makes it the first thing to
+confirm rather than assume. An agent that finds itself outside one — a writable host
+workspace, a reachable host `gh` login — is back under the rule above, with no standing
+approval at all.
 
 ## Enforcement layers
 
